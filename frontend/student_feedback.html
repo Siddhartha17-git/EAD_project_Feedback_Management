@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Student Feedback</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+body { font-family: 'Roboto', sans-serif; margin:0; padding:0; background:#f0f4f7; }
+header { text-align:center; padding:40px 0; background: #2575fc; color:#fff; }
+main { display:flex; justify-content:center; padding:40px 20px; }
+form { width:100%; max-width:700px; background:#fff; padding:40px; border-radius:20px; box-shadow:0 10px 25px rgba(0,0,0,0.2); }
+h2 { color:#2575fc; margin-bottom:20px; text-align:center; }
+label { display:block; margin-top:20px; font-weight:500; }
+input, select, textarea { width:100%; padding:12px; margin-top:10px; border-radius:10px; border:1px solid #ccc; font-size:1rem; }
+textarea { resize:vertical; }
+button { width:100%; padding:15px; margin-top:15px; border:none; border-radius:20px; background: linear-gradient(135deg, #6a11cb, #2575fc); color:#fff; font-weight:bold; font-size:1.1rem; cursor:pointer; }
+#msg { margin-top:20px; font-family: monospace; white-space: pre-wrap; }
+.link-btn { background:#4caf50; margin-top:10px; display:inline-block; padding:10px 16px; text-decoration:none; color:#fff; border-radius:10px; text-align:center; }
+</style>
+</head>
+<body>
+
+<header><h1>Student Feedback Form</h1></header>
+<main>
+<form id="feedbackForm">
+  <h2>Submit Your Feedback</h2>
+  
+  <label>Name </label>
+  <input type="text" id="studentName" placeholder="Your name" required="name">
+
+  <label>Roll Number *</label>
+  <input type="number" id="rollNumber" placeholder="Roll number">
+
+  <label> Branch </label>
+  <input type="text" id="courseBranch" placeholder="Branch">
+
+  <label>SubName / Code *</label>
+  <input type="text" id="courseName" placeholder="Subname / Code">
+
+<label>Faculty Name *</label>
+<select id="facultyName">
+  <option value="">-- Select Faculty --</option>
+  <option>Ms. T. Madhuri</option>
+  <option>Mrs. K. Swathi</option>
+  <option>Dr. D. Jayaram</option>
+  <option>Dr. P. Ramesh Babu</option>
+  <option>Dr. A. Sririsha</option>
+  <optgroup label="Professional Elective – I (PE1)">
+    <option>Mr. Sai Venkat</option>
+    <option>Mr. U. Sai Ram</option>
+  </optgroup>
+</select>
+
+
+  <label>Class Type</label>
+  <select id="classType">
+    <option>Theory</option>
+    <option>Lab</option>
+  </select>
+
+  <label>Teaching Rating (1–5) *</label>
+  <input type="number" id="teachingRating" min="1" max="5">
+
+  <label>Content Rating (1–5) *</label>
+  <input type="number" id="contentRating" min="1" max="5">
+
+  <label>Lab/Practical Rating (1–5, if applicable)</label>
+  <input type="number" id="labRating" min="1" max="5">
+
+  <label>Comments / Suggestions</label>
+  <textarea id="comments" rows="4" placeholder="Your comments"></textarea>
+
+  <label>Any Issues Faced</label>
+  <textarea id="issues" rows="3" placeholder="Describe any issues"></textarea>
+
+  <label><input type="checkbox" id="anonymous"> Submit Anonymously</label>
+
+  <button type="button" id="btnSubmit">Submit Feedback</button>
+
+  <div id="msg"></div>
+  <a class="link-btn" href="index.html">Logout</a>
+</form>
+</main>
+
+<script>
+const token = localStorage.getItem('token');
+const role = localStorage.getItem('role');
+if(!token || role !== 'student') {
+  alert('Please login as student');
+  location.href = '/index.html';
+}
+
+document.getElementById('btnSubmit').addEventListener('click', async () => {
+  const data = {
+    studentName: document.getElementById('studentName').value,
+    rollNumber: document.getElementById('rollNumber').value,
+    courseBranch: document.getElementById('courseBranch').value,
+    courseName: document.getElementById('courseName').value,
+    facultyName: document.getElementById('facultyName').value,
+    classType: document.getElementById('classType').value,
+    teachingRating: Number(document.getElementById('teachingRating').value),
+    contentRating: Number(document.getElementById('contentRating').value),
+    labRating: Number(document.getElementById('labRating').value) || 0,
+    comments: document.getElementById('comments').value,
+    issues: document.getElementById('issues').value,
+    anonymous: document.getElementById('anonymous').checked
+  };
+  const msg = document.getElementById('msg');
+  msg.textContent = '';
+  
+  if(!data.rollNumber ||!data.studentName|| !data.courseName || !data.facultyName || !data.teachingRating || !data.contentRating) {
+    msg.style.color='red'; 
+    msg.textContent='Please fill required fields'; 
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/feedback', {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization': 'Bearer ' + token},
+      body: JSON.stringify(data)
+    });
+    const j = await res.json();
+    if(j.success) { 
+      msg.style.color='green'; 
+      msg.textContent='✅ Feedback submitted successfully'; 
+      document.getElementById('feedbackForm').reset();
+    } else { 
+      msg.style.color='red'; 
+      msg.textContent=j.error||'Submission failed'; 
+    }
+  } catch (e) { 
+    msg.style.color='red'; 
+    msg.textContent='Network error'; 
+  }
+});
+</script>
+
+</body>
+</html>

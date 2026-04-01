@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Login - Feedback App</title>
+<link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+<div class="card">
+  <h1>Feedback App</h1>
+  <div id="authBox">
+    <h3>Login</h3>
+    <input id="identifier" placeholder="Email or Roll Number">
+    <input id="password" type="password" placeholder="Password">
+    <button id="btnLogin">Login</button>
+    <p>Students: <a href="register.html">Register here</a></p>
+  </div>
+  <div id="msg" style="color:red;margin-top:10px"></div>
+</div>
+
+<script>
+document.getElementById('btnLogin').addEventListener('click', async ()=> {
+  const identifier = document.getElementById('identifier').value.trim();
+  const password = document.getElementById('password').value.trim();
+  const msg = document.getElementById('msg');
+  msg.textContent = '';
+  if(!identifier || !password) { msg.textContent = 'Enter credentials'; return; }
+  try {
+    const res = await fetch('/api/auth/login', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ identifier, password })
+    });
+    const j = await res.json();
+    if(j.success) {
+      localStorage.setItem('token', j.token);
+      localStorage.setItem('role', j.role);
+      localStorage.setItem('name', j.name || '');
+      if(j.role === 'faculty') location.href = '/teacher_dashboard.html';
+      else location.href = '/student_feedback.html';
+    } else {
+      msg.textContent = j.error || 'Login failed';
+    }
+  } catch (err) {
+    msg.textContent = 'Network error';
+  }
+});
+</script>
+</body>
+</html>

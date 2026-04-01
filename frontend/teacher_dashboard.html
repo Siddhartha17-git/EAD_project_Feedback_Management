@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Teacher Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+body { font-family: 'Roboto', sans-serif; margin:0; padding:0; background:#f0f4f7; }
+header { text-align:center; padding:40px 0; background:#2575fc; color:#fff; }
+main { display:flex; flex-direction:column; align-items:center; padding:20px; }
+.dashboard { width:100%; max-width:1100px; background:#fff; padding:30px; border-radius:25px; box-shadow:0 15px 30px rgba(0,0,0,0.2); margin-bottom:20px; }
+h2 { color:#2575fc; margin-bottom:20px; text-align:center; }
+.controls { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px; align-items:center; }
+.controls label { display:flex; flex-direction:column; font-weight:500; }
+button { padding:12px; border:none; border-radius:10px; background: linear-gradient(135deg, #6a11cb, #2575fc); color:#fff; cursor:pointer; font-weight:bold; }
+a.link-btn { background:#4caf50; display:inline-block; padding:10px 16px; text-decoration:none; color:#fff; border-radius:10px; text-align:center; margin-left:5px; }
+canvas { width:100%; margin-top:20px; }
+#barChart { height:300px; }
+#lineChart { height:300px; }
+#comments { max-height:200px; overflow-y:auto; padding:10px; border:1px solid #eee; border-radius:10px; background:#fafafa; }
+table { width:100%; border-collapse:collapse; margin-top:20px; }
+th, td { border:1px solid #ccc; padding:10px; text-align:left; }
+th { background:#2575fc; color:#fff; }
+</style>
+</head>
+<body>
+
+<header><h1>Teacher Dashboard</h1></header>
+<main>
+  <div class="dashboard">
+    <h2>Feedback Reports</h2>
+    <div class="controls">
+      <label>Course:
+        <select id="filterCourse"><option>All</option></select>
+      </label>
+      <label>Faculty:
+        <select id="filterFaculty"><option>All</option></select>
+      </label>
+      <label>Class:
+        <select id="filterClass"><option>All</option><option>Theory</option><option>Lab</option></select>
+      </label>
+      <button id="btnApply">Apply</button>
+      <button id="btnRefresh">Refresh</button>
+      <a class="link-btn" href="index.html">Logout</a>
+    </div>
+
+    <canvas id="barChart"></canvas>
+
+    <canvas id="lineChart"></canvas>
+
+    <h2>Student Comments</h2>
+    <div id="comments"></div>
+
+    <h2>Feedback Table</h2>
+    <div id="tableWrap" style="max-height:220px;overflow:auto;border:1px solid #eee;padding:8px; border-radius:10px;"></div>
+
+    <h2>Export Options</h2>
+    <button id="btnExportExcel">Export Excel</button>
+    <button id="btnExportPDF">Export PDF</button>
+  </div>
+</main>
+
+<script>
+const token = localStorage.getItem('token');
+const role = localStorage.getItem('role');
+if(!token || role !== 'faculty') { alert('Login as faculty'); location.href='/index.html'; }
+
+async function fetchMeta() {
+  const res = await fetch('/api/feedback/meta', { headers: { Authorization: 'Bearer ' + token }});
+  const j = await res.json();
+  if(j.success) {
+    const fc = document.getElementById('filterCourse');
+    const ff = document.getElementById('filterFaculty');
+    fc.innerHTML = '<option>All</option>' + j.courses.map(c=>`<option>${c}</option>`).join('');
+    ff.innerHTML = '<option>All</option>' + j.faculties.map(f=>`<option>${f}</option>`).join('');
+  }
+}
+
+async function fetchData() {
+  const qs = new URLSearchParams({
+    course: document.getElementById('filterCourse').value || 'All',
+    faculty: document.getElementById('filterFaculty').value || 'All',
+    classType: document.getElementById('filterClass').value || 'All'
+  });
+  const res = await fetch('/api/feedback?' + qs.toString(), { headers: { Authorization: 'Bearer ' + token }});
+  return (await res.json()).feedbacks || [];
+}
+
+let barChart, lineChart;
+
+function renderCharts(data) {
+  const avg = arr => (arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(2);
+  if(!data.length) {
+    if(barChart) { barChart.destroy(); lineChart.destroy(); }
+    return;
+  }
+  
+  // Bar chart with colors
+  const teach = data.map(d=>Number(d.teachingRating||0));
+  const content = data.map(d=>Number(d.contentRating||0));
+  const lab = data.map(d=>Number(d.labRating||0));
+  const labels = ['Teaching','Content','Lab'];
+  const barData = [avg(teach), avg(content), avg(lab)];
+  const bctx = document.getElementById('barChart').getContext('2d');
+  if(barChart) barChart.destroy();
+  barChart = new Chart(bctx, {
+    type:'bar',
+    data:{ 
+      labels,
+      datasets:[{ 
+        label:'Average Rating',
+        data:barData,
+        backgroundColor:['#2575fc','#6a11cb','#38ef7d']
+      }]
+    },
+    options:{ scales:{ y:{ beginAtZero:true, max:5 }}}
+  });
+
+
+
+  // Line chart
+  const grouped = {};
+  data.forEach(d=>{
+    const day = new Date(d.createdAt).toISOString().slice(0,10);
+    if(!grouped[day]) grouped[day]=[];
+    grouped[day].push(Number(d.teachingRating||0));
+  });
+  const days = Object.keys(grouped).sort();
+  const trend = days.map(day=> (grouped[day].reduce((a,b)=>a+b,0)/grouped[day].length).toFixed(2));
+  const lctx = document.getElementById('lineChart').getContext('2d');
+  if(lineChart) lineChart.destroy();
+  lineChart = new Chart(lctx, { 
+    type:'line', 
+    data:{ labels:days, datasets:[{ label:'Teaching avg', data:trend, fill:false, borderColor:'#2575fc', tension:0.2 }]}, 
+    options:{ scales:{ y:{ beginAtZero:true, max:5 }}}
+  });
+}
+
+function renderComments(data) {
+  document.getElementById('comments').innerHTML = data.map(d=>`<p><strong>${d.anonymous ? 'Anonymous' : (d.studentName||'Anonymous')}:</strong> ${d.comments||''}</p>`).join('');
+}
+
+function renderTable(data) {
+  const html = `<table style="width:100%;border-collapse:collapse"><tr><th>Student</th><th>Roll</th><th>Course</th><th>Faculty</th><th>Teach</th><th>Content</th><th>Lab</th></tr>` +
+    data.map(d=>`<tr><td>${d.anonymous?'Anonymous':(d.studentName||'')}</td><td>${d.rollNumber}</td><td>${d.courseName}</td><td>${d.facultyName}</td><td>${d.teachingRating}</td><td>${d.contentRating}</td><td>${d.labRating||'-'}</td></tr>`).join('') +
+    `</table>`;
+  document.getElementById('tableWrap').innerHTML = html;
+}
+
+async function update() {
+  const data = await fetchData();
+  renderCharts(data);
+  renderComments(data);
+  renderTable(data);
+}
+
+// Buttons
+document.getElementById('btnApply').addEventListener('click', update);
+document.getElementById('btnRefresh').addEventListener('click', update);
+
+document.getElementById('btnExportExcel').addEventListener('click', async ()=>{
+  const data = await fetchData();
+  if(!data.length) return alert('No data to export');
+  const ws = XLSX.utils.json_to_sheet(data.map(d=>({
+    Student: d.anonymous?'Anonymous':(d.studentName||''),
+    Roll: d.rollNumber,
+    Course: d.courseName,
+    Faculty: d.facultyName,
+    Teaching: d.teachingRating,
+    Content: d.contentRating,
+    Lab: d.labRating || '-',
+    Comments: d.comments || '-',
+    Issues: d.issues || '-'
+  })));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Feedback');
+  XLSX.writeFile(wb, 'feedback.xlsx');
+});
+
+document.getElementById('btnExportPDF').addEventListener('click', async ()=>{
+  const data = await fetchData();
+  if(!data.length) return alert('No data to export');
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  let y = 10;
+  data.forEach(f=>{
+    doc.text(`Student: ${f.anonymous?'Anonymous':(f.studentName||'')} | Roll: ${f.rollNumber} | Course: ${f.courseName}`, 10, y);
+    doc.text(`Faculty: ${f.facultyName} | Teach: ${f.teachingRating} | Content: ${f.contentRating} | Lab: ${f.labRating||'-'}`, 10, y+6);
+    doc.text(`Comments: ${f.comments || '-'} | Issues: ${f.issues || '-'}`, 10, y+12);
+    y += 20;
+    if(y > 280) { doc.addPage(); y = 10; }
+  });
+  doc.save('feedback.pdf');
+});
+
+(async ()=> { await fetchMeta(); await update(); })();
+</script>
+
+</body>
+</html>
+  

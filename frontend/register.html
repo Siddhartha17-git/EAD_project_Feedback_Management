@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Register</title>
+<link href="css/style.css" rel="stylesheet">
+</head>
+<body>
+<div class="card">
+  <h2>Student Registration</h2>
+  <input id="roll" placeholder="Roll Number (71-137)">
+  <input id="pass" type="password" placeholder="Password">
+  <input id="cpass" type="password" placeholder="Confirm Password">
+  <button id="btnReg">Register</button>
+  <p>Already have account? <a href="index.html">Login</a></p>
+  <div id="msg" style="color:red;margin-top:8px"></div>
+</div>
+
+<script>
+document.getElementById('btnReg').addEventListener('click', async ()=>{
+  const roll = document.getElementById('roll').value.trim();
+  const pass = document.getElementById('pass').value;
+  const cpass = document.getElementById('cpass').value;
+  const msg = document.getElementById('msg');
+  msg.textContent = '';
+  try {
+    const res = await fetch('/api/auth/register', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ rollNumber: roll, password: pass, confirmPassword: cpass })
+    });
+    const j = await res.json();
+    if(j.success) {
+      msg.style.color='green';
+      msg.textContent = 'Registered. Please login.';
+      setTimeout(()=> location.href='index.html', 1200);
+    } else {
+      msg.style.color='red';
+      msg.textContent = j.error || 'Registration failed';
+    }
+  } catch(e) { msg.textContent='Network error'; }
+});
+</script>
+</body>
+</html>
